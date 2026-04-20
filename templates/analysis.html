@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analysis — {{ session.filename }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🧠</span>
+      <div><span class="logo-text">AXIOM</span><br><span class="logo-sub">LOG INTELLIGENCE</span></div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><span>📊</span> Dashboard</a></li>
+      <li class="active"><a href="#"><span>🔍</span> Analysis</a></li>
+      <li><a href="/alerts"><span>🚨</span> Alerts</a></li>
+    </ul>
+  </nav>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div>
+        <h1>🔍 Analysis: <span class="mono">{{ session.filename }}</span></h1>
+        <p class="subtitle">{{ session.log_type }} · {{ "{:,}".format(session.total_events) }} events · {{ session.created_at.strftime('%B %d, %Y %H:%M UTC') }}</p>
+      </div>
+      <a href="/" class="btn btn-primary">+ New Analysis</a>
+    </header>
+
+    <!-- Summary Banner -->
+    <div class="summary-banner {% if session.critical_count > 0 %}banner-critical{% elif session.high_count > 0 %}banner-high{% else %}banner-ok{% endif %}">
+      <div class="banner-icon">{% if session.critical_count > 0 %}🚨{% elif session.high_count > 0 %}⚠️{% else %}✅{% endif %}</div>
+      <div class="banner-body">
+        <h2>{% if session.critical_count > 0 %}CRITICAL THREATS DETECTED — Immediate action required
+        {% elif session.high_count > 0 %}HIGH SEVERITY THREATS — Investigation recommended
+        {% else %}Analysis complete — {{ session.anomaly_count }} anomalies detected{% endif %}</h2>
+        <p>{{ session.anomaly_count }} anomalies in {{ "{:,}".format(session.total_events) }} events
+          ({{ "%.1f"|format(session.anomaly_count / [session.total_events,1]|max * 100) }}% anomaly rate)</p>
+      </div>
+      <div class="banner-counts">
+        <div class="count-badge critical">{{ session.critical_count }} Critical</div>
+        <div class="count-badge high">{{ session.high_count }} High</div>
+        <div class="count-badge medium">{{ session.medium_count }} Medium</div>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="kpi-row-5">
+      <div class="kpi-mini"><div class="kn">{{ "{:,}".format(session.total_events) }}</div><div class="kl">Total Events</div></div>
+      <div class="kpi-mini red"><div class="kn">{{ session.anomaly_count }}</div><div class="kl">Anomalies</div></div>
+      <div class="kpi-mini orange"><div class="kn">{{ session.critical_count }}</div><div class="kl">Critical</div></div>
+      <div class="kpi-mini yellow"><div class="kn">{{ session.high_count }}</div><div class="kl">High</div></div>
+      <div class="kpi-mini cyan"><div class="kn">{{ session_dict['mitre_tactics']|length }}</div><div class="kl">MITRE Tactics</div></div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-3">
+      <div class="chart-box">
+        <h4>Severity Distribution</h4>
+        <canvas id="sevChart" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>Top Threat Types</h4>
+        <canvas id="threatChart" height="200"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>Top Source IPs</h4>
+        <canvas id="ipChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- MITRE ATT&CK Tactics -->
+    {% if session_dict['mitre_tactics'] %}
+    <div class="mitre-section">
+      <h3>🗺️ MITRE ATT&CK Coverage</h3>
+      <div class="tactic-pills">
+        {% for tactic in session_dict['mitre_tactics'] %}
+        <span class="tactic-pill">{{ tactic }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('detections', this)">🚨 Detections ({{ session.anomaly_count }})</button>
+      <button class="tab" onclick="showTab('ips', this)">🌐 Top IPs</button>
+      <button class="tab" onclick="showTab('mitre', this)">🗺️ MITRE Details</button>
+    </div>
+
+    <!-- Detections Tab -->
+    <div id="tab-detections" class="tab-content active">
+      {% if alerts %}
+      <table class="data-table">
+        <thead><tr><th>Threat Type</th><th>Severity</th><th>Source IP</th><th>MITRE Tactic</th><th>MITRE Technique</th><th>Score</th><th>Description</th></tr></thead>
+        <tbody>
+          {% for alert in alerts %}
+          <tr>
+            <td><span class="threat-type">{{ alert.threat_type.replace('_',' ').title() }}</span></td>
+            <td><span class="sev-badge sev-{{ alert.severity.lower() }}">{{ alert.severity }}</span></td>
+            <td>{% if alert.source_ip %}<span class="ip-badge">{{ alert.source_ip }}</span>{% else %}<span class="na">—</span>{% endif %}</td>
+            <td><span class="mitre-tactic">{{ alert.mitre_tactic.split(' ',1)[0] if alert.mitre_tactic else '—' }}</span></td>
+            <td class="tech-cell">{{ alert.mitre_tech.split(' ',1)[1] if alert.mitre_tech and ' ' in alert.mitre_tech else (alert.mitre_tech or '—') }}</td>
+            <td>
+              <div class="score-bar-wrap">
+                <div class="score-bar" style="width:{{ (alert.anomaly_score * 100)|int }}%"></div>
+                <span class="score-label">{{ "%.2f"|format(alert.anomaly_score) }}</span>
+              </div>
+            </td>
+            <td class="desc-cell">{{ alert.description[:100] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">✅ No threats detected in this log session.</div>
+      {% endif %}
+    </div>
+
+    <!-- Top IPs Tab -->
+    <div id="tab-ips" class="tab-content">
+      {% if session_dict['top_src_ips'] %}
+      <table class="data-table">
+        <thead><tr><th>Source IP</th><th>Event Count</th><th>Activity Bar</th></tr></thead>
+        <tbody>
+          {% for ip_data in session_dict['top_src_ips'] %}
+          <tr>
+            <td class="ip-badge">{{ ip_data.ip }}</td>
+            <td><span class="pill orange">{{ ip_data.events }}</span></td>
+            <td>
+              <div class="bar-wrap">
+                <div class="ip-bar" style="width:{{ [ip_data.events / (session_dict['top_src_ips'][0].events + 1) * 200, 200]|min|int }}px"></div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty-state">No source IPs detected.</div>
+      {% endif %}
+    </div>
+
+    <!-- MITRE Details Tab -->
+    <div id="tab-mitre" class="tab-content">
+      {% if session_dict['mitre_tactics'] %}
+      <div class="mitre-detail-grid">
+        {% for tactic in session_dict['mitre_tactics'] %}
+        <div class="mitre-card">
+          <div class="mitre-id">{{ tactic.split(' ')[0] }}</div>
+          <div class="mitre-name">{{ tactic.split(' ', 1)[1] if ' ' in tactic else tactic }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">No MITRE tactics mapped.</div>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+const sessionData = {{ session_dict | tojson }};
+const chartOpts = { responsive: true, plugins: { legend: { labels: { color: '#94a3b8' } } } };
+
+// Severity chart
+new Chart(document.getElementById('sevChart'), {
+  type: 'doughnut',
+  data: { labels: ['Critical','High','Medium'],
+    datasets: [{ data: [sessionData.critical_count, sessionData.high_count, sessionData.medium_count],
+      backgroundColor: ['#ef4444','#f97316','#eab308'] }] },
+  options: chartOpts
+});
+
+// Threat types chart
+const threatData = sessionData.threat_types.slice(0,7);
+new Chart(document.getElementById('threatChart'), {
+  type: 'bar',
+  data: {
+    labels: threatData.map(t => t.type.replace(/_/g,' ').slice(0,18)),
+    datasets: [{ data: threatData.map(t => t.count),
+      backgroundColor: '#3b82f6', borderRadius: 4 }]
+  },
+  options: { ...chartOpts, plugins: { legend: { display: false } },
+    scales: { x: { ticks: { color:'#64748b', font:{size:10} } }, y: { ticks: { color:'#64748b' } } } }
+});
+
+// Top IPs chart
+const ipData = sessionData.top_src_ips.slice(0,5);
+new Chart(document.getElementById('ipChart'), {
+  type: 'bar',
+  data: {
+    labels: ipData.map(i => i.ip),
+    datasets: [{ data: ipData.map(i => i.events),
+      backgroundColor: '#f97316', borderRadius: 4 }]
+  },
+  options: { ...chartOpts, plugins: { legend: { display: false } },
+    indexAxis: 'y',
+    scales: { x: { ticks: { color:'#64748b' } }, y: { ticks: { color:'#64748b', font:{size:11} } } } }
+});
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

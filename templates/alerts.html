@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alerts — AXIOM</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🧠</span>
+      <div><span class="logo-text">AXIOM</span><br><span class="logo-sub">LOG INTELLIGENCE</span></div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/"><span>📊</span> Dashboard</a></li>
+      <li class="active"><a href="/alerts"><span>🚨</span> Alerts</a></li>
+    </ul>
+  </nav>
+  <main class="main-content">
+    <header class="top-bar">
+      <h1>🚨 All Alerts</h1>
+      <a href="/" class="btn btn-primary">+ New Analysis</a>
+    </header>
+    <div class="panel" style="margin:20px 24px">
+      <table class="data-table">
+        <thead><tr><th>Threat Type</th><th>Severity</th><th>Source IP</th><th>MITRE Tactic</th><th>Anomaly Score</th><th>Description</th><th>Time</th></tr></thead>
+        <tbody>
+          {% for alert in alerts %}
+          <tr>
+            <td><span class="threat-type">{{ alert.threat_type.replace('_',' ').title() }}</span></td>
+            <td><span class="sev-badge sev-{{ alert.severity.lower() }}">{{ alert.severity }}</span></td>
+            <td>{% if alert.source_ip %}<span class="ip-badge">{{ alert.source_ip }}</span>{% else %}—{% endif %}</td>
+            <td>{{ alert.mitre_tactic.split(' ',1)[0] if alert.mitre_tactic else '—' }}</td>
+            <td><span class="score-num">{{ "%.2f"|format(alert.anomaly_score) }}</span></td>
+            <td class="desc-cell">{{ alert.description[:90] }}</td>
+            <td class="time-cell">{{ alert.created_at.strftime('%m/%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+</body>
+</html>

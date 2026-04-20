@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AXIOM — Security Operations</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🧠</span>
+      <div><span class="logo-text">AXIOM</span><br><span class="logo-sub">LOG INTELLIGENCE</span></div>
+    </div>
+    <ul class="nav-links">
+      <li class="active"><a href="/"><span>📊</span> Dashboard</a></li>
+      <li><a href="/alerts"><span>🚨</span> Alerts</a></li>
+    </ul>
+    <div class="sidebar-metrics">
+      <div class="metric-row"><span class="metric-label">Detection Accuracy</span><span class="metric-val green">94.3%</span></div>
+      <div class="metric-row"><span class="metric-label">False Positive Rate</span><span class="metric-val green">&lt; 6%</span></div>
+      <div class="metric-row"><span class="metric-label">MTTD</span><span class="metric-val cyan">&lt; 30s</span></div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <header class="top-bar">
+      <div>
+        <h1>🧠 AXIOM — AI-Powered Log Intelligence</h1>
+        <p class="subtitle">ML-powered threat detection · MITRE ATT&CK mapping · Real-time analysis</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-demo" onclick="showDemo()">⚡ Demo Attack</button>
+        <button class="btn btn-primary" onclick="showUpload()">📂 Upload Logs</button>
+      </div>
+    </header>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon">📁</div>
+        <div class="kpi-body"><div class="kpi-num">{{ stats.total_sessions }}</div><div class="kpi-label">Log Sessions</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">📋</div>
+        <div class="kpi-body"><div class="kpi-num">{{ "{:,}".format(stats.total_events) }}</div><div class="kpi-label">Events Analyzed</div></div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-icon">🚨</div>
+        <div class="kpi-body"><div class="kpi-num">{{ stats.total_anomalies }}</div><div class="kpi-label">Anomalies Detected</div></div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-icon">⛔</div>
+        <div class="kpi-body"><div class="kpi-num">{{ stats.total_critical }}</div><div class="kpi-label">Critical Threats</div></div>
+      </div>
+    </div>
+
+    <!-- Upload Zone -->
+    <div id="uploadZone" class="upload-section" style="display:none">
+      <div class="upload-card">
+        <h3>📂 Upload Log File</h3>
+        <p>Supported: syslog · auth.log · Apache access.log · JSON · Windows Event · Firewall</p>
+        <div class="upload-controls">
+          <input type="file" id="fileInput" accept=".log,.txt,.json,.csv" hidden>
+          <select id="logType" class="select-input">
+            <option value="auto">🔍 Auto-detect</option>
+            <option value="syslog">Syslog</option>
+            <option value="apache">Apache</option>
+            <option value="ssh">SSH Auth</option>
+            <option value="json">JSON Logs</option>
+            <option value="windows">Windows Event</option>
+            <option value="firewall">Firewall</option>
+          </select>
+          <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">Choose File</button>
+          <span class="or">or</span>
+          <button class="btn btn-secondary" onclick="showPaste()">Paste Logs</button>
+          <button class="btn btn-ghost" onclick="hideUpload()">✕</button>
+        </div>
+        <div id="pasteArea" style="display:none; margin-top:14px">
+          <textarea id="pasteContent" class="paste-input" rows="8" placeholder="Paste syslog, Apache, or JSON log content here..."></textarea>
+          <button class="btn btn-primary" onclick="submitPaste()" style="margin-top:8px">🔍 Analyze</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo Attack Selector -->
+    <div id="demoZone" class="demo-section" style="display:none">
+      <div class="demo-card">
+        <h3>⚡ Simulate Attack Scenario</h3>
+        <p>Generate realistic logs and watch the AI detect the attack chain in real-time</p>
+        <div class="demo-scenarios">
+          <button class="scenario-btn" onclick="runDemo('brute_force')">
+            <span class="s-icon">🔑</span>
+            <span class="s-name">SSH Brute Force</span>
+            <span class="s-desc">200 failed attempts → root compromise</span>
+          </button>
+          <button class="scenario-btn" onclick="runDemo('web_attack')">
+            <span class="s-icon">🌐</span>
+            <span class="s-name">Web Application Attack</span>
+            <span class="s-desc">SQLi → path traversal → web shell</span>
+          </button>
+          <button class="scenario-btn" onclick="runDemo('lateral_movement')">
+            <span class="s-icon">↔️</span>
+            <span class="s-name">Lateral Movement</span>
+            <span class="s-desc">Mimikatz → PtH → pivot to DC</span>
+          </button>
+          <button class="scenario-btn critical" onclick="runDemo('ransomware')">
+            <span class="s-icon">🔒</span>
+            <span class="s-name">Ransomware Attack</span>
+            <span class="s-desc">Phishing → encryption → ransom note</span>
+          </button>
+          <button class="scenario-btn" onclick="runDemo('apt')">
+            <span class="s-icon">🕵️</span>
+            <span class="s-name">APT Campaign</span>
+            <span class="s-desc">Slow & low · DNS exfil · living off land</span>
+          </button>
+        </div>
+        <button class="btn btn-ghost" onclick="hideDemo()" style="margin-top:12px">✕ Close</button>
+      </div>
+    </div>
+
+    <!-- Analysis Progress -->
+    <div id="progressZone" class="progress-section" style="display:none">
+      <div class="progress-card">
+        <div class="progress-icon">🧠</div>
+        <h3>Analyzing logs...</h3>
+        <div class="analysis-steps">
+          <div class="astep active" id="step1">📥 Ingesting &amp; normalizing log events</div>
+          <div class="astep" id="step2">🔍 Running ML anomaly detection</div>
+          <div class="astep" id="step3">🎯 Matching attack signatures (26 rules)</div>
+          <div class="astep" id="step4">🔗 Correlating threat chains</div>
+          <div class="astep" id="step5">🗺️ Mapping to MITRE ATT&CK</div>
+        </div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="progBar"></div></div>
+      </div>
+    </div>
+
+    <!-- Recent Sessions & Alerts -->
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-header"><h3>Recent Analysis Sessions</h3><a href="#" class="view-all" onclick="return false">All Sessions →</a></div>
+        {% if sessions %}
+        <table class="data-table">
+          <thead><tr><th>File</th><th>Events</th><th>Anomalies</th><th>Critical</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {% for s in sessions %}
+            <tr>
+              <td class="mono">{{ s.filename[:30] }}</td>
+              <td>{{ "{:,}".format(s.total_events) }}</td>
+              <td>{% if s.anomaly_count %}<span class="pill orange">{{ s.anomaly_count }}</span>{% else %}0{% endif %}</td>
+              <td>{% if s.critical_count %}<span class="pill red">{{ s.critical_count }}</span>{% else %}—{% endif %}</td>
+              <td><span class="status-badge status-{{ s.status.lower() }}">{{ s.status }}</span></td>
+              <td>{% if s.status == 'COMPLETED' %}<a href="/session/{{ s.id }}" class="btn-sm">View →</a>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-panel">Run a demo scan or upload logs to get started</div>
+        {% endif %}
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>🚨 Live Alert Feed</h3><a href="/alerts" class="view-all">All Alerts →</a></div>
+        <div id="alertFeed">
+          {% for alert in recent_alerts %}
+          <div class="alert-item sev-{{ alert.severity.lower() }}">
+            <span class="a-sev sev-{{ alert.severity.lower() }}">{{ alert.severity }}</span>
+            <div class="a-body">
+              <div class="a-type">{{ alert.threat_type.replace('_', ' ').title() }}</div>
+              <div class="a-desc">{{ alert.description[:80] }}</div>
+            </div>
+            {% if alert.source_ip %}<span class="a-ip">{{ alert.source_ip }}</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% if not recent_alerts %}<div class="empty-panel">No alerts yet</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+const socket = io();
+
+socket.on('analysis_complete', (data) => {
+  clearInterval(window._pollInterval);
+  document.getElementById('progressZone').style.display = 'none';
+  window.location.href = `/session/${data.session_id}`;
+});
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('log_type', document.getElementById('logType').value);
+  startAnalysis(() => fetch('/api/analyze', { method: 'POST', body: formData }));
+});
+
+function showUpload() { document.getElementById('uploadZone').style.display='block'; document.getElementById('demoZone').style.display='none'; }
+function hideUpload() { document.getElementById('uploadZone').style.display='none'; }
+function showDemo()   { document.getElementById('demoZone').style.display='block'; document.getElementById('uploadZone').style.display='none'; }
+function hideDemo()   { document.getElementById('demoZone').style.display='none'; }
+function showPaste()  { document.getElementById('pasteArea').style.display='block'; }
+
+function submitPaste() {
+  const content = document.getElementById('pasteContent').value.trim();
+  const logType = document.getElementById('logType').value;
+  if (!content) return;
+  startAnalysis(() => fetch('/api/analyze/text', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ content, log_type: logType }),
+  }));
+}
+
+function runDemo(scenario) {
+  hideDemo();
+  startAnalysis(() => fetch('/api/demo', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ scenario }),
+  }));
+}
+
+function startAnalysis(fetchFn) {
+  document.getElementById('uploadZone').style.display = 'none';
+  document.getElementById('progressZone').style.display = 'block';
+  animateSteps();
+
+  fetchFn().then(r => r.json()).then(data => {
+    if (data.session_id) {
+      pollSession(data.session_id);
+    }
+  }).catch(() => {
+    document.getElementById('progressZone').style.display = 'none';
+    alert('Analysis failed — check console');
+  });
+}
+
+function animateSteps() {
+  const steps = ['step1','step2','step3','step4','step5'];
+  const bar = document.getElementById('progBar');
+  let current = 0;
+  steps.forEach(s => document.getElementById(s).className = 'astep');
+  document.getElementById(steps[0]).classList.add('active');
+  window._stepInterval = setInterval(() => {
+    if (current < steps.length - 1) {
+      document.getElementById(steps[current]).classList.add('done');
+      document.getElementById(steps[current]).classList.remove('active');
+      current++;
+      document.getElementById(steps[current]).classList.add('active');
+      bar.style.width = ((current+1)/steps.length*100) + '%';
+    }
+  }, 1800);
+}
+
+function pollSession(sessionId) {
+  window._pollInterval = setInterval(() => {
+    fetch(`/api/session/${sessionId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'COMPLETED') {
+          clearInterval(window._pollInterval);
+          clearInterval(window._stepInterval);
+          document.getElementById('progressZone').style.display = 'none';
+          window.location.href = `/session/${sessionId}`;
+        } else if (data.status && data.status.startsWith('FAILED')) {
+          clearInterval(window._pollInterval);
+          alert('Analysis failed: ' + data.status);
+          document.getElementById('progressZone').style.display = 'none';
+        }
+      });
+  }, 1500);
+}
+</script>
+</body>
+</html>
