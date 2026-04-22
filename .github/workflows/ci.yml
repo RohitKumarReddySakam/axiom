@@ -2,9 +2,9 @@ name: AXIOM CI
 
 on:
   push:
-    branches: [master, main, develop]
+    branches: [main]
   pull_request:
-    branches: [master, main]
+    branches: [main]
 
 jobs:
   test:
@@ -14,9 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install
+      - name: Install dependencies
         run: pip install -r requirements.txt pytest
-      - name: Test
+      - name: Run tests
         run: pytest tests/ -v --tb=short
 
   demo-run:
@@ -26,32 +26,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install
+      - name: Install dependencies
         run: pip install -r requirements.txt
       - name: Demo analysis
-        run: python3 -c "
-from sample_logs.generator import generate_attack_logs
-from core.log_parser import LogParser
-from core.ml_detector import MLDetector
-from core.pattern_matcher import PatternMatcher
-import tempfile, os
+        run: |
+          python3 << 'PYEOF'
+          import tempfile, os, sys
+          sys.path.insert(0, '.')
+          from sample_logs.generator import generate_attack_logs
+          from core.log_parser import LogParser
+          from core.ml_detector import MLDetector
+          from core.pattern_matcher import PatternMatcher
 
-content, log_type = generate_attack_logs('brute_force')
-with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-    f.write(content)
-    path = f.name
+          content, log_type = generate_attack_logs('brute_force')
+          with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
+              f.write(content)
+              path = f.name
 
-parser = LogParser()
-events = parser.parse(path, 'syslog', 'demo.log')
-detector = MLDetector()
-matcher = PatternMatcher()
-anomalies = detector.detect(events)
-sig_hits = matcher.match(events)
-os.unlink(path)
+          parser  = LogParser()
+          events  = parser.parse(path, 'syslog', 'demo.log')
+          detector = MLDetector()
+          matcher  = PatternMatcher()
+          anomalies = detector.detect(events)
+          sig_hits  = matcher.match(events)
+          os.unlink(path)
 
-print(f'Events: {len(events)} | ML anomalies: {len(anomalies)} | Sig hits: {len(sig_hits)}')
-critical = [a for a in anomalies + sig_hits if a.get('severity') == 'CRITICAL']
-print(f'Critical: {len(critical)}')
-assert len(events) > 0, 'No events parsed'
-print('CI demo run passed')
-"
+          print(f'Events: {len(events)} | ML anomalies: {len(anomalies)} | Sig hits: {len(sig_hits)}')
+          critical = [a for a in anomalies + sig_hits if a.get('severity') == 'CRITICAL']
+          print(f'Critical: {len(critical)}')
+          assert len(events) > 0, 'No events parsed'
+          print('CI demo run passed')
+          PYEOF
