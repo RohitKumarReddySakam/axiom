@@ -143,7 +143,7 @@ def analyze_text():
     data     = request.get_json()
     content  = data.get("content", "")
     log_type = data.get("log_type", "syslog")
-    filename = data.get("filename", f"paste_{log_type}.log")
+    filename = secure_filename(data.get("filename", f"paste_{log_type}.log")) or f"paste_{log_type}.log"
     if not content:
         return jsonify({"error": "No content"}), 400
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -163,10 +163,11 @@ def demo_analysis():
     """Run analysis on built-in demo logs"""
     scenario = request.get_json(silent=True) or {}
     attack   = scenario.get("scenario", "brute_force")
+    safe_attack = secure_filename(attack) or "brute_force"
     from sample_logs.generator import generate_attack_logs
     content, log_type = generate_attack_logs(attack)
     os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-    path = os.path.join(app.config["UPLOAD_FOLDER"], f"{uuid.uuid4()}_demo_{attack}.log")
+    path = os.path.join(app.config["UPLOAD_FOLDER"], f"{uuid.uuid4()}_demo_{safe_attack}.log")
     with open(path, "w") as f:
         f.write(content)
     session = LogSession(filename=f"demo_{attack}.log", log_type=log_type, status="PROCESSING")
